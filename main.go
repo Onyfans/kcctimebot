@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -47,7 +48,7 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	bot.Close()
+	_ = bot.Close()
 }
 
 func zoneEvent(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -68,68 +69,24 @@ func zoneEvent(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func convertTime(t string) (string, error) {
-	m := ""
-	pi, ei := 0, 0
+	sp := strings.Split(t, ":")
+	h, _ := strconv.Atoi(sp[0])
+	m, _ := strconv.Atoi(sp[1])
 
-	h := t[0:2]
-	if strings.Contains(t, ":") {
-		m = t[3:]
-	} else {
-		m = t[2:]
-	}
-
-	hi, err := strconv.Atoi(h)
+	pacLocation, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
-		return "", errors.New("Failed to convert h")
+		return "", errors.New("failed to load Pacific time zone")
 	}
-
-	if hi < 0 || hi > 23 {
-		return "", errors.New("hour out of bounds")
-	}
-
-	mi, err := strconv.Atoi(m)
+	estLocation, err := time.LoadLocation("America/New_York")
 	if err != nil {
-		return "", errors.New("Failed to convert m")
+		return "", errors.New("failed to load Eastern time zone")
 	}
 
-	if mi < 0 || mi > 59 {
-		return "", errors.New("hour out of bounds")
-	}
+	now := time.Now()
+	utcTime := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, time.UTC)
+	utcStr := utcTime.Format("15:04")
+	pacStr := utcTime.In(pacLocation).Format("03:04 PM")
+	estStr := utcTime.In(estLocation).Format("03:04 PM")
 
-	if hi < 8 {
-		pi = 24 + hi - 8
-	} else {
-		pi = hi - 8
-	}
-
-	if hi < 5 {
-		ei = 24 + hi - 5
-	} else {
-		ei = hi - 5
-	}
-
-	postfix := "AM"
-	if pi == 0 {
-		pi = 12
-	} else if pi == 12 {
-		postfix = "PM"
-	} else if pi > 12 {
-		pi -= 12
-		postfix = "PM"
-	}
-
-	pacific := fmt.Sprintf("%d:%s %s", pi, m, postfix)
-
-	postfix = "AM"
-	if ei == 0 {
-		ei = 12
-	} else if ei == 12 {
-		postfix = "PM"
-	} else if ei > 12 {
-		ei -= 12
-		postfix = "PM"
-	}
-	eastern := fmt.Sprintf("%d:%s %s", ei, m, postfix)
-
-	return "`" + h + ":" + m + " Server | " + pacific + " Pacific | " + eastern + " Eastern`", nil
+	return fmt.Sprintf("`Server: %s | Pacific %s | Eastern %s`", utcStr, pacStr, estStr), nil
 }
