@@ -1,9 +1,9 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"regexp"
@@ -16,8 +16,12 @@ import (
 )
 
 var (
-	Token string
-	reg   *regexp.Regexp
+	Token       string
+	reg         *regexp.Regexp
+	regpst      *regexp.Regexp
+	regest      *regexp.Regexp
+	pacLocation *time.Location
+	estLocation *time.Location
 )
 
 func init() {
@@ -25,6 +29,19 @@ func init() {
 	flag.Parse()
 
 	reg = regexp.MustCompile(`\d{2}:\d{2}`)
+	regpst = regexp.MustCompile(`PST|pst|pacific|Pacific`)
+	regest = regexp.MustCompile(`EST|est|Eastern|eastern`)
+
+	var err error
+	pacLocation, err = time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		log.Fatal("failed to load Pacific time zone")
+	}
+	estLocation, err = time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Fatal("failed to load Eastern time zone")
+	}
+
 }
 
 func main() {
@@ -52,13 +69,23 @@ func main() {
 }
 
 func zoneEvent(s *discordgo.Session, m *discordgo.MessageCreate) {
+	var msg string
+	var err error
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
 	match := reg.Find([]byte(m.Content))
 	if match != nil {
-		msg, err := convertTime(string(match))
+		pstmatch := regpst.Find([]byte(m.Content))
+		estmatch := regest.Find([]byte(m.Content))
+		if pstmatch != nil {
+			msg, err = convertTime(string(match), pacLocation)
+		} else if estmatch != nil {
+			msg, err = convertTime(string(match), estLocation)
+		} else {
+			msg, err = convertTime(string(match), time.UTC)
+		}
 		if err != nil {
 			fmt.Println("Error: ", err)
 		} else {
@@ -68,25 +95,17 @@ func zoneEvent(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-func convertTime(t string) (string, error) {
+func convertTime(t string, tz *time.Location) (string, error) {
 	sp := strings.Split(t, ":")
 	h, _ := strconv.Atoi(sp[0])
 	m, _ := strconv.Atoi(sp[1])
 
-	pacLocation, err := time.LoadLocation("America/Los_Angeles")
-	if err != nil {
-		return "", errors.New("failed to load Pacific time zone")
-	}
-	estLocation, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return "", errors.New("failed to load Eastern time zone")
-	}
-
 	now := time.Now()
-	utcTime := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, time.UTC)
-	utcStr := utcTime.Format("15:04")
-	pacStr := utcTime.In(pacLocation).Format("03:04 PM")
-	estStr := utcTime.In(estLocation).Format("03:04 PM")
+	posterTime := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, tz)
+
+	utcStr := posterTime.In(time.UTC).Format("15:04")
+	pacStr := posterTime.In(pacLocation).Format("03:04 PM")
+	estStr := posterTime.In(estLocation).Format("03:04 PM")
 
 	return fmt.Sprintf("`Server: %s | Pacific %s | Eastern %s`", utcStr, pacStr, estStr), nil
 }
