@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -97,8 +98,14 @@ func zoneEvent(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func convertTime(t string, tz *time.Location) (string, error) {
 	sp := strings.Split(t, ":")
-	h, _ := strconv.Atoi(sp[0])
-	m, _ := strconv.Atoi(sp[1])
+	h, err := strconv.Atoi(sp[0])
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("failed to convert hours of %s", t))
+	}
+	m, err := strconv.Atoi(sp[1])
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("failed to convert minutes of %s", t))
+	}
 
 	now := time.Now()
 	posterTime := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, tz)
