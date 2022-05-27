@@ -1,4 +1,4 @@
-module git.fputs.com/fputs/kcctimebot
+module github.com/KarazhanChessClub/kcctimebot
 
 go 1.17
 
